@@ -16,6 +16,7 @@ export interface SemanticTree {
   root: SemanticNode;
   plainEnglishTranslation: string;
   language: string;
+  rawTreeSitterAST?: string;
 }
 
 export interface AnalyzeRequest {

@@ -5,19 +5,32 @@ import type { SemanticTree } from '@/types/semantic';
 import CodeInput from '@/components/CodeInput';
 import CodeDisplay from '@/components/CodeDisplay';
 import SemanticSidebar from '@/components/SemanticSidebar';
+import LoadingOverlay from '@/components/LoadingOverlay';
 
 export default function Home() {
   const [semanticTree, setSemanticTree] = useState<SemanticTree | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStage, setLoadingStage] = useState<'parsing' | 'adding-meanings' | 'complete'>('parsing');
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const handleAnalyze = async (code: string, language: string) => {
     setIsLoading(true);
+    setLoadingStage('parsing');
+    setLoadingProgress(0);
     setError(null);
     setSemanticTree(null);
 
     try {
+      // Simulate stage 1 progress (parsing)
+      setLoadingStage('parsing');
+      setLoadingProgress(10);
+      
+      await new Promise(r => setTimeout(r, 300));
+      setLoadingProgress(30);
+      
+      // Call the API
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
@@ -26,17 +39,28 @@ export default function Home() {
         body: JSON.stringify({ code, language }),
       });
 
+      // Update to stage 2 (adding meanings)
+      setLoadingStage('adding-meanings');
+      setLoadingProgress(40);
+      
       const data = await response.json();
+
+      setLoadingProgress(90);
+      await new Promise(r => setTimeout(r, 200));
 
       if (data.success) {
         setSemanticTree(data.data);
+        setLoadingProgress(100);
+        setLoadingStage('complete');
       } else {
         setError(data.error || 'Failed to analyze code');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
-      setIsLoading(false);
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 500);
     }
   };
 
@@ -57,8 +81,8 @@ export default function Home() {
         {!semanticTree ? (
           <CodeInput onAnalyze={handleAnalyze} isLoading={isLoading} />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <div className="lg:col-span-3 space-y-4">
               <div className="bg-white rounded-lg shadow p-4">
                 <h2 className="text-lg font-semibold mb-4">Code Analysis</h2>
                 <CodeDisplay
@@ -75,6 +99,17 @@ export default function Home() {
                   {semanticTree.plainEnglishTranslation}
                 </p>
               </div>
+              
+              {semanticTree.rawTreeSitterAST && (
+                <details className="bg-gray-100 border border-gray-300 rounded-lg p-4">
+                  <summary className="font-semibold text-gray-900 cursor-pointer hover:text-blue-600">
+                    Tree-sitter AST (Click to expand)
+                  </summary>
+                  <pre className="mt-3 text-xs font-mono text-gray-700 overflow-x-auto whitespace-pre">
+                    {semanticTree.rawTreeSitterAST}
+                  </pre>
+                </details>
+              )}
               <button
                 onClick={() => setSemanticTree(null)}
                 className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
@@ -82,7 +117,7 @@ export default function Home() {
                 Analyze New Code
               </button>
             </div>
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-2">
               <SemanticSidebar
                 semanticTree={semanticTree}
                 selectedNodeId={selectedNodeId}
@@ -100,6 +135,12 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      <LoadingOverlay
+        isVisible={isLoading}
+        stage={loadingStage}
+        progress={loadingProgress}
+      />
     </div>
   );
 }

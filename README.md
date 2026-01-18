@@ -110,10 +110,6 @@ Step 3: Compose into larger units, repeat until full program
 - [ ] Better multiline code visualization
 - [ ] Syntax highlighting integration
 
-## License
-
-MIT
-
 ## Contributing
 
 Contributions welcome! Please open an issue or PR.
