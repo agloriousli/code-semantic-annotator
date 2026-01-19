@@ -1,6 +1,6 @@
 # Semantic Code Explorer
 
-An interactive web application that performs recursive, bottom-up semantic decomposition of C++ code snippets using Google Gemini AI.
+An interactive web application that performs recursive, bottom-up semantic decomposition of C++ code snippets.
 
 ## Features
 
@@ -26,7 +26,7 @@ An interactive web application that performs recursive, bottom-up semantic decom
 
 - Node.js 18+ 
 - npm or yarn
-- Google Gemini API key ([Get one here](https://makersuite.google.com/app/apikey))
+- Gemini API key 
 
 ### Installation
 
@@ -109,7 +109,3 @@ Step 3: Compose into larger units, repeat until full program
 - [ ] Save/share annotated snippets
 - [ ] Better multiline code visualization
 - [ ] Syntax highlighting integration
-
-## Contributing
-
-Contributions welcome! Please open an issue or PR.
