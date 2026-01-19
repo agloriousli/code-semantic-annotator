@@ -166,6 +166,12 @@ function astNodeToSemanticNode(
   // Determine if this is elementary (leaf) or composite
   const isElementary = childrenTemp.length === 0 && node.childCount <= 1;
 
+  // Only set tokenType for known token categories; otherwise leave undefined
+  const allowedTokenTypes = new Set(['identifier', 'literal', 'operator', 'keyword', 'delimiter']);
+  const tokenType = isElementary && allowedTokenTypes.has(classification)
+    ? (classification as SemanticNode['tokenType'])
+    : undefined;
+
   return {
     id: nodeId,
     code: nodeCode,
@@ -174,15 +180,46 @@ function astNodeToSemanticNode(
     generalMeaning: `${classification}: ${node.type}`,
     contextualMeaning: '', // Will be filled by LLM
     nodeType: isElementary ? 'elementary' : 'composite',
-    tokenType: isElementary ? classification : null,
+    tokenType,
     children: childrenTemp,
   };
+}
+
+// Format AST tree with proper indentation
+function formatASTTree(node: Parser.SyntaxNode, depth: number = 0): string {
+  const indent = '  '.repeat(depth);
+  const nodeType = node.type;
+  const text = node.text.substring(0, 50).replace(/\n/g, ' ');
+  const isLeaf = node.childCount === 0;
+  
+  let result = `${indent}${nodeType}`;
+  
+  if (isLeaf && text.length > 0) {
+    result += ` "${text}"${text.length === node.text.length ? '' : '...'}`;
+  }
+  
+  result += ` [${node.startIndex}–${node.endIndex}]`;
+  
+  if (node.childCount > 0) {
+    result += '\n';
+    for (let i = 0; i < node.childCount; i++) {
+      const child = node.child(i);
+      if (child) {
+        result += formatASTTree(child, depth + 1);
+        if (i < node.childCount - 1) {
+          result += '\n';
+        }
+      }
+    }
+  }
+  
+  return result;
 }
 
 export function parseCode(code: string): { root: SemanticNode; rawAST: string } {
   const parser = initParser();
   const tree = parser.parse(code);
-  const rawAST = tree.rootNode.toString();
+  const rawAST = formatASTTree(tree.rootNode);
 
   const idCounter = { value: 0 };
   const root = astNodeToSemanticNode(tree.rootNode, code, idCounter);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { execFileSync } from 'child_process';
 import type { AnalyzeRequest, AnalyzeResponse, SemanticTree } from '@/types/semantic';
 import { parseCode, flattenTree } from '@/app/lib/parser';
 
@@ -17,8 +18,11 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Optional: normalize formatting for C++ before parsing
+    const normalizedCode = formatCodeIfSupported(code, language);
+
     // Stage 1: Parse code with tree-sitter (local, no LLM)
-    const { root, rawAST } = parseCode(code);
+    const { root, rawAST } = parseCode(normalizedCode);
 
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
@@ -31,10 +35,18 @@ export async function POST(request: NextRequest) {
     // Stage 2: Add contextual meanings to all nodes (single LLM call)
     const allNodes = flattenTree(root);
     const nodeListForLLM = allNodes
-      .map((n) => `ID: ${n.id} | [${n.startPos}-${n.endPos}] "${n.code.substring(0, 40)}" | Type: ${n.nodeType} | General: ${n.generalMeaning}`)
+      .map((n) => {
+        // For elementary nodes (identifiers, keywords, literals), show full code
+        // For composite nodes, truncate to 60 chars but preserve identifier names
+        let displayCode = n.code;
+        if (n.nodeType === 'composite' && displayCode.length > 60) {
+          displayCode = displayCode.substring(0, 60) + '...';
+        }
+        return `ID: ${n.id} | [${n.startPos}-${n.endPos}] "${displayCode}" | Type: ${n.nodeType} | General: ${n.generalMeaning}`;
+      })
       .join('\n');
 
-    const meaningPrompt = buildMeaningPrompt(code, language, nodeListForLLM);
+    const meaningPrompt = buildMeaningPrompt(normalizedCode, language, nodeListForLLM);
     const meaningResult = await model.generateContent(meaningPrompt);
     const meaningText = meaningResult.response.text();
     const meanings = parseMeaningResponse(meaningText);
@@ -44,7 +56,7 @@ export async function POST(request: NextRequest) {
     applyMeaningsToTree(root, meaningsByNodeId);
 
     // Stage 3: Generate plain English translation
-    const translationPrompt = buildTranslationPrompt(code, language, root);
+    const translationPrompt = buildTranslationPrompt(normalizedCode, language, root);
     const translationResult = await model.generateContent(translationPrompt);
     const translationText = translationResult.response.text();
     const translation = parseTranslationResponse(translationText);
@@ -70,36 +82,53 @@ export async function POST(request: NextRequest) {
 }
 
 function buildMeaningPrompt(code: string, language: string, nodeList: string): string {
-  return `You are a semantic code analyzer. Given a ${language} code snippet and its AST nodes, provide TWO types of meanings for each node:
+  return `You are a formal semantic analyzer.
 
-1. GENERAL MEANING: What this code fragment represents in the programming language, independent of any surrounding code (e.g., "for loop initialization", "variable declaration", "function call").
+The code below has already been parsed using Tree-sitter. Each entry represents ONE Tree-sitter node.
+You MUST NOT invent any structure or meaning beyond what is implied by the node type and code span.
 
-2. CONTEXTUAL MEANING: What this fragment specifically does or contributes within this complete code snippet (e.g., "initializes loop counter to iterate through array", "declares buffer size constant", "calls sort function on user list").
+For EACH node, provide EXACTLY TWO meanings:
 
-CODE:
+1. GENERAL MEANING
+- Describe what this Tree-sitter node type represents in the ${language} language specification.
+- This MUST be context-independent.
+- Focus on syntactic and semantic role (not intent, not usage).
+- Example: "binary expression", "variable declarator", "function call expression".
+
+2. CONTEXTUAL MEANING
+- Describe what this node contributes SPECIFICALLY within THIS code snippet.
+- Assume all child nodes have already been explained.
+- Do NOT restate child behavior.
+- Describe ONLY the additional role this node plays when composed with its children.
+
+STRICT RULES:
+- Do NOT repeat explanations across nodes.
+- Do NOT summarize the entire program except for the root node.
+- Do NOT use informal language, metaphors, or stylistic commentary.
+- Each node must be explained EXACTLY ONCE.
+- Meanings must be concise (1–2 sentences max per field).
+- Use only information visible in the code and node type.
+
+CODE (${language}):
 \`\`\`${language}
 ${code}
 \`\`\`
 
-AST NODES:
+TREE-SITTER NODES (authoritative):
 ${nodeList}
 
-For each node ID, provide both meanings (each 1-2 sentences).
-
-OUTPUT FORMAT:
-Return a JSON object:
+OUTPUT FORMAT (JSON ONLY):
 {
   "meanings": [
     {
       "nodeId": "node_0",
-      "generalMeaning": "Language-level explanation of what this construct is",
-      "contextualMeaning": "Specific explanation of what this does in this code"
-    },
-    ...
+      "generalMeaning": "...",
+      "contextualMeaning": "..."
+    }
   ]
 }
 
-Return ONLY the JSON object, no additional text.`;
+Return ONLY valid JSON. No markdown. No commentary.`;
 }
 
 interface MeaningEntry {
@@ -152,4 +181,23 @@ Return ONLY the translation text, no JSON or additional formatting.`;
 
 function parseTranslationResponse(text: string): string {
   return text.trim();
+}
+
+function formatCodeIfSupported(code: string, language: string): string {
+  const lang = language.toLowerCase();
+  const isCpp = lang.includes('c++') || lang === 'cpp' || lang === 'cxx' || lang.includes('cpp');
+  if (!isCpp) return code;
+
+  try {
+    // Use clang-format if available; fallback to original on error
+    const output = execFileSync(
+      'clang-format',
+      ['-assume-filename=code.cpp', '-style=LLVM'],
+      { input: code, maxBuffer: 5 * 1024 * 1024 }
+    );
+    return output.toString();
+  } catch (err) {
+    console.warn('clang-format not available or failed; using original code');
+    return code;
+  }
 }
