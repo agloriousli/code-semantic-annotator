@@ -1,0 +1,41 @@
+
+> semantic-code-explorer@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.8:3000
+- Environments: .env
+
+✓ Starting...
+✓ Ready in 725ms
+ GET / 200 in 358ms (compile: 207ms, render: 150ms)
+Error analyzing code: Error: No native build was found for platform=darwin arch=arm64 runtime=node abi=127 uv=1 armv=8 libc=glibc node=22.5.1
+    loaded from: /ROOT/node_modules/tree-sitter
+
+    at async initParser (app/lib/parser.ts:8:21)
+    at async parseCode (app/lib/parser.ts:214:18)
+    at async POST (app/api/analyze/route.ts:21:30)
+   6 | async function initParser() {
+   7 |   if (!parser) {
+>  8 |     const Parser = (await import('tree-sitter')).default;
+     |                     ^
+   9 |     const Cpp = (await import('tree-sitter-cpp')).default;
+  10 |     parser = new Parser();
+  11 |     parser.setLanguage(Cpp);
+ POST /api/analyze 500 in 322ms (compile: 169ms, render: 152ms)
+Error analyzing code: Error: No native build was found for platform=darwin arch=arm64 runtime=node abi=127 uv=1 armv=8 libc=glibc node=22.5.1
+    loaded from: /ROOT/node_modules/tree-sitter
+
+    at async initParser (app/lib/parser.ts:8:21)
+    at async parseCode (app/lib/parser.ts:214:18)
+    at async POST (app/api/analyze/route.ts:21:30)
+   6 | async function initParser() {
+   7 |   if (!parser) {
+>  8 |     const Parser = (await import('tree-sitter')).default;
+     |                     ^
+   9 |     const Cpp = (await import('tree-sitter-cpp')).default;
+  10 |     parser = new Parser();
+  11 |     parser.setLanguage(Cpp);
+ POST /api/analyze 500 in 76ms (compile: 3ms, render: 74ms)
+[?25h
